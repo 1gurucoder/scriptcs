@@ -1,6 +1,5 @@
 ﻿extern alias MonoCSharp;
 
-using MonoCSharp::Mono.CSharp;
 using ScriptCs.Contracts;
 
 namespace ScriptCs.Engine.Mono
@@ -14,7 +13,12 @@ namespace ScriptCs.Engine.Mono
             _scriptHost = scriptHost;
         }
 
-        public static ScriptEnvironment Env { get { return _scriptHost.Env; } }
+        public static IScriptEnvironment Env { get { return _scriptHost.Env; } }
+
+        IScriptEnvironment IScriptHost.Env
+        {
+            get { return _scriptHost.Env; }
+        }
 
         public static T Require<T>() where T : IScriptPackContext
         {

@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Versioning;
-using Common.Logging;
 using ScriptCs.Contracts;
 
 namespace ScriptCs.Command
@@ -15,8 +14,8 @@ namespace ScriptCs.Command
         private readonly IFileSystem _fileSystem;
         private readonly IPackageAssemblyResolver _packageAssemblyResolver;
         private readonly IPackageInstaller _packageInstaller;
+        private readonly IScriptLibraryComposer _composer;
         private readonly ILog _logger;
-        private readonly IFileSystemMigrator _fileSystemMigrator;
 
         public InstallCommand(
             string name,
@@ -25,26 +24,35 @@ namespace ScriptCs.Command
             IFileSystem fileSystem,
             IPackageAssemblyResolver packageAssemblyResolver,
             IPackageInstaller packageInstaller,
-            ILog logger,
-            IFileSystemMigrator fileSystemMigrator)
+            IScriptLibraryComposer composer,
+            ILogProvider logger)
         {
-            Guard.AgainstNullArgument("fileSystemMigrator", fileSystemMigrator);
-
             _name = name;
             _version = version ?? string.Empty;
             _allowPre = allowPre;
             _fileSystem = fileSystem;
             _packageAssemblyResolver = packageAssemblyResolver;
             _packageInstaller = packageInstaller;
-            _logger = logger;
-            _fileSystemMigrator = fileSystemMigrator;
+            _composer = composer;
+            _logger = logger.ForCurrentType();
         }
 
         public CommandResult Execute()
         {
-            _fileSystemMigrator.Migrate();
-
             _logger.Info("Installing packages...");
+
+            var packagesFolder = Path.Combine(_fileSystem.CurrentDirectory, _fileSystem.PackagesFolder);
+            if (!string.IsNullOrWhiteSpace(_composer.ScriptLibrariesFile))
+            {
+                var scriptLibrariesFile = Path.Combine(packagesFolder, _composer.ScriptLibrariesFile);
+
+                if (_fileSystem.FileExists(scriptLibrariesFile))
+                {
+                    _logger.DebugFormat("Deleting: {0}", scriptLibrariesFile);
+                    _fileSystem.FileDelete(scriptLibrariesFile);
+                }
+            }
+
             var packages = GetPackages(_fileSystem.CurrentDirectory);
             try
             {
@@ -54,7 +62,7 @@ namespace ScriptCs.Command
             }
             catch (Exception ex)
             {
-                _logger.ErrorFormat("Package installation failed: {0}.", ex, ex.Message);
+                _logger.ErrorException("Package installation failed.", ex);
                 return CommandResult.Error;
             }
         }

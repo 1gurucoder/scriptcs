@@ -1,17 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
+﻿using System.IO;
 using System.Linq;
-
-using Common.Logging;
-
 using Moq;
 using Ploeh.AutoFixture.Xunit;
 using ScriptCs.Contracts;
-
 using Should;
-
-using Xunit;
 using Xunit.Extensions;
 
 namespace ScriptCs.Tests
@@ -24,6 +16,7 @@ namespace ScriptCs.Tests
             public void ShouldReturnAssembliesFromPackagesFolder(
                 [Frozen] Mock<IFileSystem> fileSystemMock,
                 [Frozen] Mock<IPackageAssemblyResolver> packageAssemblyResolverMock,
+                [Frozen] Mock<IAssemblyUtility> assemblyUtilityMock,
                 AssemblyResolver resolver
             )
             {
@@ -32,6 +25,7 @@ namespace ScriptCs.Tests
                 var packagesFolder = Path.Combine(WorkingDirectory, "packages");
                 var assemblyFile = Path.Combine(packagesFolder, "MyAssembly.dll");
 
+                assemblyUtilityMock.Setup(a => a.IsManagedAssembly(It.IsAny<string>())).Returns(true);
                 fileSystemMock.Setup(x => x.DirectoryExists(packagesFolder)).Returns(true);
                 fileSystemMock.SetupGet(x => x.PackagesFolder).Returns("packages");
                 fileSystemMock.SetupGet(x => x.BinFolder).Returns("bin");
@@ -104,11 +98,14 @@ namespace ScriptCs.Tests
             public void ShouldOnlyReturnBinariesWhenFlagIsSet(
                 [Frozen] Mock<IPackageAssemblyResolver> packageAssemblyResolverMock, 
                 [Frozen] Mock<IFileSystem> fileSystemMock, 
+                [Frozen] Mock<IAssemblyUtility> assemblyUtilityMock,
                 AssemblyResolver resolver)
             {
                 const string WorkingDirectory = @"C:\";
 
                 var binFolder = Path.Combine(WorkingDirectory, "bin");
+
+                assemblyUtilityMock.Setup(a => a.IsManagedAssembly(It.IsAny<string>())).Returns(true);
                 fileSystemMock.Setup(x => x.DirectoryExists(binFolder)).Returns(true);
                 fileSystemMock.Setup(x => x.DirectoryExists(@"C:\packages")).Returns(true);
                 fileSystemMock.SetupGet(x => x.PackagesFolder).Returns("packages");

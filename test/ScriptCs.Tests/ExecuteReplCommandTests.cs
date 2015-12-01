@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Common.Logging;
 using Moq;
 using Ploeh.AutoFixture.Xunit;
 using ScriptCs.Command;
@@ -25,26 +24,22 @@ namespace ScriptCs.Tests
                 ScriptServices services)
             {
                 // arrange
-                var args = new ScriptCsArgs { Repl = true };
-                var readLines = 0;
-                var builder = new StringBuilder();
+                var config = new Config { Repl = true };
 
-                console.Setup(x => x.ReadLine()).Callback(() => readLines++).Throws(new Exception());
-                console.Setup(x => x.Write(It.IsAny<string>())).Callback<string>(value => builder.Append(value));
+                console.Setup(x => x.ReadLine(It.IsAny<string>())).Returns((string)null);
                 initializationServices.Setup(i => i.GetFileSystem()).Returns(fileSystem.Object);
                 servicesBuilder.SetupGet(b => b.InitializationServices).Returns(initializationServices.Object);
                 servicesBuilder.SetupGet(b => b.ConsoleInstance).Returns(console.Object);
                 servicesBuilder.Setup(b => b.Build()).Returns(services);
 
                 var factory = new CommandFactory(servicesBuilder.Object);
-                var sut = factory.CreateCommand(args, new string[0]);
+                var sut = factory.CreateCommand(config, new string[0]);
 
                 // act
                 sut.Execute();
 
                 // assert
-                builder.ToString().EndsWith("> ").ShouldBeTrue();
-                readLines.ShouldEqual(1);
+                console.Verify(x=>x.ReadLine("> "));
             }
 
             [Theory, ScriptCsAutoData]
@@ -57,7 +52,7 @@ namespace ScriptCs.Tests
                 ScriptServices services)
             {
                 // arrange
-                var args = new ScriptCsArgs { Repl = true, ScriptName = "test.csx", };
+                var args = new Config { Repl = true, ScriptName = "test.csx", };
 
                 scriptEngine.Setup(x => x.Execute(
                     "#load test.csx",
@@ -66,7 +61,7 @@ namespace ScriptCs.Tests
                     It.IsAny<IEnumerable<string>>(),
                     It.IsAny<ScriptPackSession>()));
 
-                console.Setup(x => x.ReadLine()).Throws(new Exception());
+                console.Setup(x => x.ReadLine("")).Throws(new Exception());
                 initializationServices.Setup(i => i.GetFileSystem()).Returns(fileSystem.Object);
                 servicesBuilder.SetupGet(b => b.InitializationServices).Returns(initializationServices.Object);
                 servicesBuilder.Setup(b => b.Build()).Returns(services);
@@ -91,15 +86,15 @@ namespace ScriptCs.Tests
                 ScriptServices services)
             {
                 // arrange
-                var args = new ScriptCsArgs { Repl = true };
+                var config = new Config { Repl = true };
 
-                console.Setup(x => x.ReadLine()).Throws(new Exception());
+                console.Setup(x => x.ReadLine("")).Throws(new Exception());
                 initializationServices.Setup(i => i.GetFileSystem()).Returns(fileSystem.Object);
                 servicesBuilder.SetupGet(b => b.InitializationServices).Returns(initializationServices.Object);
                 servicesBuilder.Setup(b => b.Build()).Returns(services);
 
                 var factory = new CommandFactory(servicesBuilder.Object);
-                var sut = factory.CreateCommand(args, new string[0]);
+                var sut = factory.CreateCommand(config, new string[0]);
 
                 // act
                 sut.Execute();
@@ -119,26 +114,48 @@ namespace ScriptCs.Tests
             public void MigratesTheFileSystem(
                 [Frozen] Mock<IFileSystem> fileSystem,
                 [Frozen] Mock<IConsole> console,
-                [Frozen] Mock<IFileSystemMigrator> fileSystemMigrator)
+                [Frozen] Mock<IFileSystemMigrator> fileSystemMigrator,
+                IScriptLibraryComposer composer)
             {
                 // arrange
-                console.Setup(c => c.ReadLine()).Throws(new Exception());
+                console.Setup(c => c.ReadLine("")).Throws(new Exception());
                 var sut = new ExecuteReplCommand(
                     null,
                     null,
                     fileSystem.Object,
                     new Mock<IScriptPackResolver>().Object,
                     new Mock<IRepl>().Object,
-                    new Mock<ILog>().Object,
+                    new TestLogProvider(),
                     console.Object,
                     new Mock<IAssemblyResolver>().Object,
-                    fileSystemMigrator.Object);
+                    fileSystemMigrator.Object,
+                    composer
+                    );
 
                 // act
                 sut.Execute();
 
                 // assert
                 fileSystemMigrator.Verify(m => m.Migrate(), Times.Once);
+            }
+
+            [Theory, ScriptCsAutoData]
+            public void ShouldComposeScripts([Frozen] Mock<IFileSystem> fileSystem, Mock<IScriptLibraryComposer> composer)
+            {
+                var cmd = new ExecuteScriptCommand(
+                    null,
+                    null,
+                    fileSystem.Object,
+                    new Mock<IScriptExecutor>().Object,
+                    new Mock<IScriptPackResolver>().Object,
+                    new TestLogProvider(),
+                    new Mock<IAssemblyResolver>().Object,
+                    new Mock<IFileSystemMigrator>().Object,
+                    composer.Object);
+
+                cmd.Execute();
+
+                composer.Verify(c => c.Compose(It.IsAny<string>(),null));
             }
         }
     }

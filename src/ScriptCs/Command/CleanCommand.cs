@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using Common.Logging;
 using ScriptCs.Contracts;
 
 namespace ScriptCs.Command
@@ -10,29 +9,21 @@ namespace ScriptCs.Command
         private readonly string _scriptName;
         private readonly IFileSystem _fileSystem;
         private readonly ILog _logger;
-        private readonly IFileSystemMigrator _fileSystemMigrator;
 
-        public CleanCommand(
-            string scriptName, IFileSystem fileSystem, ILog logger, IFileSystemMigrator fileSystemMigrator)
+        public CleanCommand(string scriptName, IFileSystem fileSystem, ILogProvider logProvider)
         {
-            Guard.AgainstNullArgument("fileSystem", fileSystem);
             Guard.AgainstNullArgumentProperty("fileSystem", "PackagesFolder", fileSystem.PackagesFolder);
             Guard.AgainstNullArgumentProperty("fileSystem", "DllCacheFolder", fileSystem.DllCacheFolder);
 
-            Guard.AgainstNullArgument("logger", logger);
-
-            Guard.AgainstNullArgument("fileSystemMigrator", fileSystemMigrator);
+            Guard.AgainstNullArgument("logProvider", logProvider);
 
             _scriptName = scriptName;
             _fileSystem = fileSystem;
-            _logger = logger;
-            _fileSystemMigrator = fileSystemMigrator;
+            _logger = logProvider.ForCurrentType();
         }
 
         public CommandResult Execute()
         {
-            _fileSystemMigrator.Migrate();
-
             _logger.Info("Cleaning initiated...");
 
             var workingDirectory = _fileSystem.GetWorkingDirectory(_scriptName);

@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Reflection;
-
 using ScriptCs.Contracts;
 
 namespace ScriptCs
 {
-    public class AssemblyUtility : IAssemblyUtility 
+    public class AssemblyUtility : IAssemblyUtility
     {
         public bool IsManagedAssembly(string path)
         {

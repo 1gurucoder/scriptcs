@@ -1,5 +1,4 @@
 ﻿using System;
-using Common.Logging;
 using ScriptCs.Contracts;
 
 namespace ScriptCs.Command
@@ -10,24 +9,20 @@ namespace ScriptCs.Command
 
         private readonly IFileSystem _fileSystem;
         private readonly ILog _logger;
-        private readonly IFileSystemMigrator _fileSystemMigrator;
 
-        public SaveCommand(IPackageAssemblyResolver packageAssemblyResolver, IFileSystem fileSystem, ILog logger, IFileSystemMigrator fileSystemMigrator)
+        public SaveCommand(IPackageAssemblyResolver packageAssemblyResolver, IFileSystem fileSystem, ILogProvider logProvider)
         {
             Guard.AgainstNullArgument("packageAssemblyResolver", packageAssemblyResolver);
             Guard.AgainstNullArgument("fileSystem", fileSystem);
-            Guard.AgainstNullArgument("fileSystemMigrator", fileSystemMigrator);
+            Guard.AgainstNullArgument("logProvider", logProvider);
 
             _packageAssemblyResolver = packageAssemblyResolver;
             _fileSystem = fileSystem;
-            _logger = logger;
-            _fileSystemMigrator = fileSystemMigrator;
+            _logger = logProvider.ForCurrentType();
         }
 
         public CommandResult Execute()
         {
-            _fileSystemMigrator.Migrate();
-
             _logger.InfoFormat("Saving packages in {0}...", _fileSystem.PackagesFile);
 
             try

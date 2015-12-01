@@ -1,17 +1,44 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using Common.Logging;
 using ScriptCs.Contracts;
 
 namespace ScriptCs
 {
     public class ScriptExecutor : IScriptExecutor
     {
-        public static readonly string[] DefaultReferences = new[] { "System", "System.Core", "System.Data", "System.Data.DataSetExtensions", "System.Xml", "System.Xml.Linq", "System.Net.Http" };
-        public static readonly string[] DefaultNamespaces = new[] { "System", "System.Collections.Generic", "System.Linq", "System.Text", "System.Threading.Tasks", "System.IO", "System.Net.Http" };
+        private readonly ILog _log;
+
+        public static readonly string[] DefaultReferences =
+        {
+            "System", 
+            "System.Core", 
+            "System.Data", 
+            "System.Data.DataSetExtensions", 
+            "System.Xml", 
+            "System.Xml.Linq", 
+            "System.Net.Http",
+            "Microsoft.CSharp",
+            typeof(ScriptExecutor).Assembly.Location,
+            typeof(IScriptEnvironment).Assembly.Location
+        };
+
+        public static readonly string[] DefaultNamespaces =
+        {
+            "System",
+            "System.Collections.Generic",
+            "System.Linq", 
+            "System.Text", 
+            "System.Threading.Tasks",
+            "System.IO",
+            "System.Net.Http",
+            "System.Dynamic"
+        };
+
+        private const string ScriptLibrariesInjected = "ScriptLibrariesInjected";
 
         public IFileSystem FileSystem { get; private set; }
 
@@ -19,7 +46,8 @@ namespace ScriptCs
 
         public IScriptEngine ScriptEngine { get; private set; }
 
-        public ILog Logger { get; private set; }
+        [Obsolete("Support for Common.Logging types was deprecated in version 0.15.0 and will soon be removed.")]
+        public Common.Logging.ILog Logger { get; private set; }
 
         public AssemblyReferences References { get; private set; }
 
@@ -27,20 +55,58 @@ namespace ScriptCs
 
         public ScriptPackSession ScriptPackSession { get; protected set; }
 
-        public ScriptExecutor(IFileSystem fileSystem, IFilePreProcessor filePreProcessor, IScriptEngine scriptEngine, ILog logger)
+        public IScriptLibraryComposer ScriptLibraryComposer { get; protected set; }
+
+        [Obsolete("Support for Common.Logging types was deprecated in version 0.15.0 and will soon be removed.")]
+        public ScriptExecutor(
+            IFileSystem fileSystem, IFilePreProcessor filePreProcessor, IScriptEngine scriptEngine, Common.Logging.ILog logger)
+            : this(fileSystem, filePreProcessor, scriptEngine, new CommonLoggingLogProvider(logger), new NullScriptLibraryComposer())
+        {
+        }
+
+        public ScriptExecutor(
+            IFileSystem fileSystem, IFilePreProcessor filePreProcessor, IScriptEngine scriptEngine, ILogProvider logProvider)
+            : this(fileSystem, filePreProcessor, scriptEngine, logProvider, new NullScriptLibraryComposer())
+        {
+        }
+
+        [Obsolete("Support for Common.Logging types was deprecated in version 0.15.0 and will soon be removed.")]
+        public ScriptExecutor(
+            IFileSystem fileSystem,
+            IFilePreProcessor filePreProcessor,
+            IScriptEngine scriptEngine,
+            Common.Logging.ILog logger,
+            IScriptLibraryComposer composer)
+            : this(fileSystem, filePreProcessor, scriptEngine, new CommonLoggingLogProvider(logger), composer)
+        {
+        }
+
+        public ScriptExecutor(
+            IFileSystem fileSystem,
+            IFilePreProcessor filePreProcessor,
+            IScriptEngine scriptEngine,
+            ILogProvider logProvider,
+            IScriptLibraryComposer composer)
         {
             Guard.AgainstNullArgument("fileSystem", fileSystem);
             Guard.AgainstNullArgumentProperty("fileSystem", "BinFolder", fileSystem.BinFolder);
             Guard.AgainstNullArgumentProperty("fileSystem", "DllCacheFolder", fileSystem.DllCacheFolder);
+            Guard.AgainstNullArgument("filePreProcessor", filePreProcessor);
+            Guard.AgainstNullArgument("scriptEngine", scriptEngine);
+            Guard.AgainstNullArgument("logProvider", logProvider);
+            Guard.AgainstNullArgument("composer", composer);
 
-            References = new AssemblyReferences();
-            AddReferences(DefaultReferences);
+            References = new AssemblyReferences(DefaultReferences);
             Namespaces = new Collection<string>();
             ImportNamespaces(DefaultNamespaces);
             FileSystem = fileSystem;
             FilePreProcessor = filePreProcessor;
             ScriptEngine = scriptEngine;
-            Logger = logger;
+            _log = logProvider.ForCurrentType();
+#pragma warning disable 618
+            Logger = new ScriptCsLogger(_log);
+#pragma warning restore 618
+            ScriptLibraryComposer = composer;
         }
 
         public void ImportNamespaces(params string[] namespaces)
@@ -50,46 +116,6 @@ namespace ScriptCs
             foreach (var @namespace in namespaces)
             {
                 Namespaces.Add(@namespace);
-            }
-        }
-
-        public void AddReferences(params Assembly[] assemblies)
-        {
-            Guard.AgainstNullArgument("assemblies", assemblies);
-
-            foreach (var assembly in assemblies)
-            {
-                References.Assemblies.Add(assembly);
-            }
-        }
-
-        public void RemoveReferences(params Assembly[] assemblies)
-        {
-            Guard.AgainstNullArgument("assemblies", assemblies);
-
-            foreach (var assembly in assemblies)
-            {
-                References.Assemblies.Remove(assembly);
-            }
-        }
-
-        public void AddReferences(params string[] paths)
-        {
-            Guard.AgainstNullArgument("paths", paths);
-
-            foreach (var path in paths)
-            {
-                References.PathReferences.Add(path);
-            }
-        }
-
-        public void RemoveReferences(params string[] paths)
-        {
-            Guard.AgainstNullArgument("paths", paths);
-
-            foreach (var path in paths)
-            {
-                References.PathReferences.Remove(path);
             }
         }
 
@@ -103,7 +129,36 @@ namespace ScriptCs
             }
         }
 
-        public virtual void Initialize(IEnumerable<string> paths, IEnumerable<IScriptPack> scriptPacks, params string[] scriptArgs)
+        public virtual void AddReferences(params Assembly[] assemblies)
+        {
+            Guard.AgainstNullArgument("assemblies", assemblies);
+
+            References = References.Union(assemblies);
+        }
+
+        public virtual void RemoveReferences(params Assembly[] assemblies)
+        {
+            Guard.AgainstNullArgument("assemblies", assemblies);
+
+            References = References.Except(assemblies);
+        }
+
+        public virtual void AddReferences(params string[] paths)
+        {
+            Guard.AgainstNullArgument("paths", paths);
+
+            References = References.Union(paths);
+        }
+
+        public virtual void RemoveReferences(params string[] paths)
+        {
+            Guard.AgainstNullArgument("paths", paths);
+
+            References = References.Except(paths);
+        }
+
+        public virtual void Initialize(
+            IEnumerable<string> paths, IEnumerable<IScriptPack> scriptPacks, params string[] scriptArgs)
         {
             AddReferences(paths.ToArray());
             var bin = Path.Combine(FileSystem.CurrentDirectory, FileSystem.BinFolder);
@@ -112,18 +167,15 @@ namespace ScriptCs
             ScriptEngine.BaseDirectory = bin;
             ScriptEngine.CacheDirectory = cache;
 
-            Logger.Debug("Initializing script packs");
+            _log.Debug("Initializing script packs");
             var scriptPackSession = new ScriptPackSession(scriptPacks, scriptArgs);
-
-            scriptPackSession.InitializePacks();
             ScriptPackSession = scriptPackSession;
+            scriptPackSession.InitializePacks();
         }
 
         public virtual void Reset()
         {
-            References = new AssemblyReferences();
-            AddReferences(DefaultReferences);
-
+            References = new AssemblyReferences(DefaultReferences);
             Namespaces.Clear();
             ImportNamespaces(DefaultNamespaces);
 
@@ -132,7 +184,7 @@ namespace ScriptCs
 
         public virtual void Terminate()
         {
-            Logger.Debug("Terminating packs");
+            _log.Debug("Terminating packs");
             ScriptPackSession.TerminatePacks();
         }
 
@@ -140,22 +192,71 @@ namespace ScriptCs
         {
             var path = Path.IsPathRooted(script) ? script : Path.Combine(FileSystem.CurrentDirectory, script);
             var result = FilePreProcessor.ProcessFile(path);
-            References.PathReferences.UnionWith(result.References);
-            var namespaces = Namespaces.Union(result.Namespaces);
             ScriptEngine.FileName = Path.GetFileName(path);
-
-            Logger.Debug("Starting execution in engine");
-            return ScriptEngine.Execute(result.Code, scriptArgs, References, namespaces, ScriptPackSession);
+            return EngineExecute(Path.GetDirectoryName(path), scriptArgs, result);
         }
 
         public virtual ScriptResult ExecuteScript(string script, params string[] scriptArgs)
         {
             var result = FilePreProcessor.ProcessScript(script);
-            References.PathReferences.UnionWith(result.References);
-            var namespaces = Namespaces.Union(result.Namespaces);
+            return EngineExecute(FileSystem.CurrentDirectory, scriptArgs, result);
+        }
 
-            Logger.Debug("Starting execution in engine");
-            return ScriptEngine.Execute(result.Code, scriptArgs, References, namespaces, ScriptPackSession);
+        protected internal virtual ScriptResult EngineExecute(
+            string workingDirectory, 
+            string[] scriptArgs, 
+            FilePreProcessorResult result
+        )
+        {
+            InjectScriptLibraries(workingDirectory, result, ScriptPackSession.State);
+            var namespaces = Namespaces.Union(result.Namespaces);
+            var references = References.Union(result.References);
+            _log.Debug("Starting execution in engine");
+            return ScriptEngine.Execute(result.Code, scriptArgs, references, namespaces, ScriptPackSession);
+        }
+
+        protected internal virtual void InjectScriptLibraries(
+            string workingDirectory,
+            FilePreProcessorResult result,
+            IDictionary<string, object> state
+        )
+        {
+            Guard.AgainstNullArgument("result", result);
+            Guard.AgainstNullArgument("state", state);
+
+            if (state.ContainsKey(ScriptLibrariesInjected))
+            {
+                return;
+            }
+
+            var scriptLibrariesPreProcessorResult = LoadScriptLibraries(workingDirectory);
+
+            if (scriptLibrariesPreProcessorResult != null)
+            {
+                result.Code = scriptLibrariesPreProcessorResult.Code + Environment.NewLine + result.Code;
+                result.References.AddRange(scriptLibrariesPreProcessorResult.References);
+                result.Namespaces.AddRange(scriptLibrariesPreProcessorResult.Namespaces);
+            }
+            state.Add(ScriptLibrariesInjected, null);
+        }
+
+        protected internal virtual FilePreProcessorResult LoadScriptLibraries(string workingDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(ScriptLibraryComposer.ScriptLibrariesFile))
+            {
+                return null;
+            }
+
+            var scriptLibrariesPath = Path.Combine(workingDirectory, FileSystem.PackagesFolder,
+                ScriptLibraryComposer.ScriptLibrariesFile);
+
+            if (FileSystem.FileExists(scriptLibrariesPath))
+            {
+                _log.DebugFormat("Found Script Library at {0}", scriptLibrariesPath);
+                return FilePreProcessor.ProcessFile(scriptLibrariesPath);
+            }
+
+            return null;
         }
     }
 }

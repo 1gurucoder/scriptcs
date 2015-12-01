@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using Autofac;
-using Common.Logging;
 using ScriptCs.Contracts;
 using ScriptCs.Hosting.Package;
 
@@ -9,26 +8,52 @@ namespace ScriptCs.Hosting
 {
     public class InitializationServices : ScriptServicesRegistration, IInitializationServices
     {
-        public InitializationServices(ILog logger, IDictionary<Type, object> overrides = null)
-            : base(logger, overrides)
+        private readonly ILog _log;
+
+        [Obsolete("Support for Common.Logging types was deprecated in version 0.15.0 and will soon be removed.")]
+        public InitializationServices(Common.Logging.ILog logger, IDictionary<Type, object> overrides = null)
+            : this(new CommonLoggingLogProvider(logger), overrides)
         {
+        }
+
+        public InitializationServices(ILogProvider logProvider, IDictionary<Type, object> overrides = null)
+            : base(logProvider, overrides)
+        {
+            Guard.AgainstNullArgument("logProvider", logProvider);
+
+            _log = logProvider.ForCurrentType();
+
         }
 
         protected override IContainer CreateContainer()
         {
             var builder = new ContainerBuilder();
-            this.Logger.Debug("Registering initialization services");
-            builder.RegisterInstance<ILog>(this.Logger);
+            _log.Debug("Registering initialization services");
+            builder.RegisterInstance(this.LogProvider);
             builder.RegisterType<ScriptServicesBuilder>().As<IScriptServicesBuilder>();
+
+            RegisterLineProcessors(builder);
+            
             RegisterOverrideOrDefault<IFileSystem>(builder, b => b.RegisterType<FileSystem>().As<IFileSystem>().SingleInstance());
+            
             RegisterOverrideOrDefault<IAssemblyUtility>(builder, b => b.RegisterType<AssemblyUtility>().As<IAssemblyUtility>().SingleInstance());
+            
             RegisterOverrideOrDefault<IPackageContainer>(builder, b => b.RegisterType<PackageContainer>().As<IPackageContainer>().SingleInstance());
+            
             RegisterOverrideOrDefault<IPackageAssemblyResolver>(builder, b => b.RegisterType<PackageAssemblyResolver>().As<IPackageAssemblyResolver>().SingleInstance());
+            
             RegisterOverrideOrDefault<IAssemblyResolver>(builder, b => b.RegisterType<AssemblyResolver>().As<IAssemblyResolver>().SingleInstance());
+            
             RegisterOverrideOrDefault<IInstallationProvider>(builder, b => b.RegisterType<NugetInstallationProvider>().As<IInstallationProvider>().SingleInstance());
+            
             RegisterOverrideOrDefault<IPackageInstaller>(builder, b => b.RegisterType<PackageInstaller>().As<IPackageInstaller>().SingleInstance());
+            
             RegisterOverrideOrDefault<IModuleLoader>(builder, b => b.RegisterType<ModuleLoader>().As<IModuleLoader>().SingleInstance());
+            
             RegisterOverrideOrDefault<IAppDomainAssemblyResolver>(builder, b => b.RegisterType<AppDomainAssemblyResolver>().As<IAppDomainAssemblyResolver>().SingleInstance());
+
+            RegisterOverrideOrDefault<IFilePreProcessor>(builder, b => b.RegisterType<FilePreProcessor>().As<IFilePreProcessor>().SingleInstance());
+
             return builder.Build();
         }
 
@@ -36,91 +61,67 @@ namespace ScriptCs.Hosting
 
         public IAssemblyResolver GetAssemblyResolver()
         {
-            if (_assemblyResolver == null)
-            {
-                this.Logger.Debug("Resolving AssemblyResolver");
-                _assemblyResolver = Container.Resolve<IAssemblyResolver>();
-            }
-
-            return _assemblyResolver;
+            return GetService(ref _assemblyResolver);
         }
 
         private IModuleLoader _moduleLoader;
 
         public IModuleLoader GetModuleLoader()
         {
-            if (_moduleLoader == null)
-            {
-                this.Logger.Debug("Resolving ModuleLoader");
-                _moduleLoader = Container.Resolve<IModuleLoader>();
-            }
-
-            return _moduleLoader;
+            return GetService(ref _moduleLoader);
         }
 
         private IFileSystem _fileSystem;
 
         public IFileSystem GetFileSystem()
         {
-            if (_fileSystem == null)
-            {
-                this.Logger.Debug("Resolving FileSystem");
-                _fileSystem = Container.Resolve<IFileSystem>();
-            }
-
-            return _fileSystem;
+            return GetService(ref _fileSystem);
         }
 
         private IInstallationProvider _installationProvider;
 
         public IInstallationProvider GetInstallationProvider()
         {
-            if (_installationProvider == null)
-            {
-                this.Logger.Debug("Resolving Installation Provider");
-                _installationProvider = Container.Resolve<IInstallationProvider>();
-            }
-
-            return _installationProvider;
+            return GetService(ref _installationProvider);
         }
 
         private IPackageAssemblyResolver _packageAssemblyResolver;
 
         public IPackageAssemblyResolver GetPackageAssemblyResolver()
         {
-            if (_packageAssemblyResolver == null)
-            {
-                this.Logger.Debug("Resolving Package Assembly Resolver");
-                _packageAssemblyResolver = Container.Resolve<IPackageAssemblyResolver>();
-            }
-
-            return _packageAssemblyResolver;
+            return GetService(ref _packageAssemblyResolver);
         }
 
         private IPackageInstaller _packageInstaller;
 
         public IPackageInstaller GetPackageInstaller()
         {
-            if (_packageInstaller == null)
-            {
-                this.Logger.Debug("Resolving Package Installer");
-                _packageInstaller = Container.Resolve<IPackageInstaller>();
-            }
-
-            return _packageInstaller;
+            return GetService(ref _packageInstaller);
         }
 
         private IAppDomainAssemblyResolver _appDomainAssemblyResolver;
 
         public IAppDomainAssemblyResolver GetAppDomainAssemblyResolver()
         {
-            if (_appDomainAssemblyResolver == null)
+            return GetService(ref _appDomainAssemblyResolver);
+        }
+
+        private IAssemblyUtility _assemblyUtility;
+
+        public IAssemblyUtility GetAssemblyUtility()
+        {
+            return GetService(ref _assemblyUtility);
+        }
+
+        private T GetService<T>(ref T service )
+        {
+            if (Equals(service,null))
             {
-                this.Logger.Debug("Resolving App Domain Assembly Resolver");
-                _appDomainAssemblyResolver = Container.Resolve<IAppDomainAssemblyResolver>();
+                _log.Debug(string.Format("Resolving {0}", typeof(T).Name));
+                service = Container.Resolve<T>();
             }
 
-            return _appDomainAssemblyResolver;
+            return service;
         }
     }
 }

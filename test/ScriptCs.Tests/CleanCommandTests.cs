@@ -1,5 +1,4 @@
-﻿using Common.Logging;
-using Moq;
+﻿using Moq;
 using Ploeh.AutoFixture.Xunit;
 using ScriptCs.Command;
 using ScriptCs.Contracts;
@@ -22,7 +21,7 @@ namespace ScriptCs.Tests
                 ScriptServices services)
             {
                 // Arrange
-                var args = new ScriptCsArgs { Clean = true };
+                var args = new Config { Clean = true };
 
                 fileSystem.Setup(i => i.DirectoryExists(It.Is<string>(x => x.Contains(folder)))).Returns(true);
                 initializationServices.Setup(i => i.GetFileSystem()).Returns(fileSystem.Object);
@@ -37,20 +36,6 @@ namespace ScriptCs.Tests
                 // Assert
                 fileSystem.Verify(i => i.DirectoryExists(It.Is<string>(x => x.Contains(folder))), Times.Once());
                 fileSystem.Verify(i => i.DeleteDirectory(It.Is<string>(x => x.Contains(folder))), Times.Once());
-            }
-
-            [Theory, ScriptCsAutoData]
-            public void MigratesTheFileSystem(
-                [Frozen] Mock<IFileSystem> fileSystem, [Frozen] Mock<IFileSystemMigrator> migrator)
-            {
-                // Arrange
-                var sut = new CleanCommand(null, fileSystem.Object, new Mock<ILog>().Object, migrator.Object);
-
-                // Act
-                sut.Execute();
-
-                // Assert
-                migrator.Verify(m => m.Migrate(), Times.Once);
             }
         }
     }

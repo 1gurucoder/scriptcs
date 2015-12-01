@@ -4,6 +4,8 @@
 
 [![*nix Build Status](http://img.shields.io/travis/scriptcs/scriptcs/dev.svg?style=flat-square&label=linux-build)](https://travis-ci.org/scriptcs/scriptcs) [![Windows Build Status](http://img.shields.io/teamcity/codebetter/Scriptcs_Ci.svg?style=flat-square&label=windows-build)](http://ci.scriptcs.net) [![Coverity Scan Build Status](https://img.shields.io/badge/coverity-passed-brightgreen.svg?style=flat-square)](https://scan.coverity.com/projects/2356)
 
+[![Issue Stats](http://issuestats.com/github/scriptcs/scriptcs/badge/pr?style=flat-square)](http://issuestats.com/github/scriptcs/scriptcs) [![Issue Stats](http://issuestats.com/github/scriptcs/scriptcs/badge/issue?style=flat-square)](http://issuestats.com/github/scriptcs/scriptcs)
+
 ## What is it?
 
 scriptcs makes it easy to write and execute C# with a simple text editor.
@@ -159,7 +161,7 @@ RavenDB started, listening on http://localhost:8080.
 
 Script Packs can be used to further reduce the amount of code you need to write when working with common frameworks. 
 
-* In an empty directory, install the [ScriptCs.WebApi](https://nuget.org/packages/ScriptCs.WebApi/) script pack from NuGet. The script pack will automatically imports the Web API namespaces and provides a convenient factory method for initializing the Web API host. It also replaces the default `ControllerResolver` with a custom implementation that allows Web API to discover controllers declared in scripts.
+* In an empty directory, install the [ScriptCs.WebApi](https://nuget.org/packages/ScriptCs.WebApi/) script pack from NuGet. The script pack automatically imports the Web API namespaces and provides a convenient factory method for initializing the Web API host. It also replaces the default `ControllerResolver` with a custom implementation that allows Web API to discover controllers declared in scripts.
 
 ```batchfile
 scriptcs -install ScriptCs.WebApi
@@ -239,11 +241,11 @@ Instructions for debugging scripts using Visual Studio can be found on the [wiki
 
 ### Package installation
 
-You can install any NuGet packages directly from the scriptcs CLI. This will pull the relevant packages from NuGet, and install them in the packages folder.
+You can install any NuGet packages directly from the scriptcs CLI. This will pull the relevant packages from NuGet, and install them in the scriptcs_packages folder.
 
 Once the packages are installed, you can simply start using them in your script code directly (just import the namespaces - no additional bootstrapping or DLL referencing is needed).
 
-The `install` command will also create a `packages.config` file if you don't have one - so that you can easily redistribute your script (without having to copy the package binaries).
+The `install` command will also create a `scriptcs_packages.config` file if you don't have one - so that you can easily redistribute your script (without having to copy the package binaries).
 
  - `scriptcs -install {package name}` will install the desired package from NuGet. 
  	
@@ -251,9 +253,9 @@ The `install` command will also create a `packages.config` file if you don't hav
 
 		scriptcs -install ServiceStack
 		
- - `scriptcs -install` (without package name) will look for the `packages.config` file located in the current execution directory, and install all the packages specified there. You only need to specify **top level** packages.
+ - `scriptcs -install` (without package name) will look for the `scriptcs_packages.config` file located in the current execution directory, and install all the packages specified there. You only need to specify **top level** packages.
 
-For example, you might create the following `packages.config`:
+For example, you might create the following `scriptcs_packages.config`:
 
 	<?xml version="1.0" encoding="utf-8"?>
 	<packages>
@@ -266,7 +268,7 @@ And then just call:
 
     scriptcs -install
 
-As a result, all packages specified in the `packages.config`, including all dependencies, will be downloaded and installed in the `packages` folder. 
+As a result, all packages specified in the `scriptcs_packages.config`, including all dependencies, will be downloaded and installed in the `scriptcs_packages` folder. 
 
 
 ## Contributing
@@ -296,7 +298,7 @@ Want to chat? In addition to Twitter, you can find us on [Google Groups](https:/
 * [Damian Schenkelman](http://github.com/dschenkelman) ([@dschenkelman](https://twitter.com/intent/user?screen_name=dschenkelman))
 * [Kristian Hellang](http://github.com/khellang) ([@khellang](https://twitter.com/intent/user?screen_name=khellang))
 * [Adam Ralph](http://github.com/adamralph) ([@adamralph](https://twitter.com/intent/user?screen_name=adamralph))
-
+* [Paul Bouwer](http://github.com/paulbouwer) [@pbouwer](https://twitter.com/intent/user?screen_name=pbouwer))
 
 ## Credits 
 
